@@ -3,9 +3,9 @@ import type { Prisma } from "../generated/prisma/client";
 import type { Ctx } from "./auth";
 
 export type AuditInput = {
-  action: "POLICY_CREATED" | "POLICY_VERSION_CREATED" | "ASSIGNMENT_CREATED" | "ASSIGNMENT_ENDED" | "ACCRUAL_RUN" | "ADJUSTMENT_CREATED" | "REQUEST_CREATED" | "REQUEST_APPROVED" | "REQUEST_REJECTED" | "REQUEST_CANCELLED" | "PAYROLL_ACCRUAL_RUN" | "EMPLOYEE_START_DATE_SET" | "YEAR_END_RUN";
+  action: "POLICY_CREATED" | "POLICY_VERSION_CREATED" | "ASSIGNMENT_CREATED" | "ASSIGNMENT_ENDED" | "ACCRUAL_RUN" | "ADJUSTMENT_CREATED" | "REQUEST_CREATED" | "REQUEST_APPROVED" | "REQUEST_REJECTED" | "REQUEST_CANCELLED" | "PAYROLL_ACCRUAL_RUN" | "EMPLOYEE_START_DATE_SET" | "YEAR_END_RUN" | "HOLIDAY_CALENDAR_CREATED" | "HOLIDAY_SET" | "HOLIDAY_REMOVED" | "WORK_SCHEDULE_SET";
   // a new version is recorded against its policy, so one policy's whole history is one query
-  entityType: "policy" | "assignment" | "company" | "ledger_entry" | "request" | "employee_start_date";
+  entityType: "policy" | "assignment" | "company" | "ledger_entry" | "request" | "employee_start_date" | "holiday_calendar" | "work_schedule";
   entityId: string;
   before?: Prisma.InputJsonValue;
   after?: Prisma.InputJsonValue;
