@@ -1,3 +1,5 @@
+/* global process */
+
 // where /api/* is forwarded, the api listens on 4000 unless API_URL says otherwise
 const API_URL = process.env.API_URL ?? "http://localhost:4000";
 
