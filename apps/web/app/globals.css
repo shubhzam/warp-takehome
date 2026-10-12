@@ -803,3 +803,27 @@ textarea.input {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
+
+.assignment-list {
+  margin: 0;
+}
+
+.assignment {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.assignment-main {
+  display: flex;
+  align-items: center;
+  gap: 4px 10px;
+  flex-wrap: wrap;
+}
+
+.strong {
+  font-weight: 600;
+}
