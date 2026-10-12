@@ -25,6 +25,11 @@ echo "start dates"
 curl -s "${ADM[@]}" -X PUT $BASE/employees/emp_2201/start-date -d '{"startDate":"2024-03-10"}' > /dev/null
 curl -s "${ADM[@]}" -X PUT $BASE/employees/emp_2202/start-date -d '{"startDate":"2021-01-15"}' > /dev/null
 
+echo "default calendar US with three holidays, and a 6 hour week for emp_2202"
+CAL=$(post /holiday-calendars '{"name":"US","isDefault":true}' | jq -r .id)
+curl -s "${ADM[@]}" -X PUT $BASE/holiday-calendars/$CAL/holidays -d '{"holidays":[{"date":"2026-11-26","name":"Thanksgiving"},{"date":"2026-11-27","name":"Day after Thanksgiving"},{"date":"2026-12-25","name":"Christmas"}]}' > /dev/null
+curl -s "${ADM[@]}" -X PUT $BASE/employees/emp_2202/work-schedule -d '{"effectiveFrom":"2026-01-01","hoursPerDay":"6","workDays":[1,2,3,4,5]}' > /dev/null
+
 echo "accruals for 2026-07, 2026-08, 2026-09 and one payroll period"
 for m in 2026-07 2026-08 2026-09; do post /accrual-runs "{\"period\":\"$m\"}" > /dev/null; done
 post /payroll-accruals '{"periodStart":"2026-09-01","periodEnd":"2026-09-30","entries":[{"employeeId":"emp_2201","hoursWorked":"160"},{"employeeId":"emp_2202","hoursWorked":"120"}]}' > /dev/null
