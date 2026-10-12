@@ -9,6 +9,8 @@ import { policiesRouter } from "./routes/policies";
 import { accrualRunsRouter, adjustmentsRouter, employeeLedgerRouter } from "./routes/ledger";
 import { requestsRouter } from "./routes/requests";
 import { payrollRouter } from "./routes/payroll";
+import { startDatesRouter } from "./routes/tenure";
+import { yearEndRouter } from "./routes/yearEnd";
 // runs SELECT 1 and gives up after dbTimeoutMs, so /health never hangs
 async function isDatabaseUp(): Promise<boolean> {
   let timer: NodeJS.Timeout | undefined;
@@ -52,6 +54,8 @@ app.use("/adjustments", requireAdmin, adjustmentsRouter);
 app.use("/employees", requireAdmin, employeeLedgerRouter);
 app.use("/requests", requireUser, requestsRouter);
 app.use("/payroll-accruals", requireAdmin, payrollRouter);
+app.use("/employees", requireAdmin, startDatesRouter);
+app.use("/year-end-runs", requireAdmin, yearEndRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: { code: "NOT_FOUND", message: "route not found" } });

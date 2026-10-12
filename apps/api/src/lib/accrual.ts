@@ -9,6 +9,32 @@ const dayNumber = (iso: string): number =>
 
 const toIso = (day: number): string => new Date(day * DAY_MS).toISOString().slice(0, 10);
 
+const isLeapYear = (year: number): boolean => (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+
+// whole years of service completed on a day, the anniversary day itself counts as completed
+// a feb 29 start has its anniversary on mar 1 in years that are not leap years
+export function tenureYears(startIso: string, dayIso: string): number {
+  const startYear = Number(startIso.slice(0, 4));
+  const startMonth = Number(startIso.slice(5, 7));
+  const startDay = Number(startIso.slice(8, 10));
+  const year = Number(dayIso.slice(0, 4));
+  const month = Number(dayIso.slice(5, 7));
+  const day = Number(dayIso.slice(8, 10));
+
+  let years = year - startYear;
+  if (years <= 0) return 0;
+
+  let annivMonth = startMonth;
+  let annivDay = startDay;
+  if (startMonth === 2 && startDay === 29 && !isLeapYear(year)) {
+    annivMonth = 3;
+    annivDay = 1;
+  }
+  // this year's anniversary has not come yet
+  if (month < annivMonth || (month === annivMonth && day < annivDay)) years -= 1;
+  return years;
+}
+
 // start is the first day, endExclusive the first day of the next month, lastDay the date an accrual is booked on
 export function periodBounds(period: string) {
   const start = dayNumber(`${period}-01`);
@@ -23,9 +49,12 @@ export function periodBounds(period: string) {
 
 export type AccrualVersion = { versionNo: number; effectiveFrom: string; config: PolicyConfig };
 
+// tenureYears is only present when the version has tiers, it is the tenure on the segment's first day
+export type AccrualSegment = { versionNo: number; days: number; monthlyHours: string; tenureYears?: number };
+
 export type AccrualDetail = {
   daysInPeriod: number;
-  segments: { versionNo: number; days: number; monthlyHours: string }[];
+  segments: AccrualSegment[];
 };
 
 type AccrualInput = {
@@ -33,12 +62,15 @@ type AccrualInput = {
   assignmentFrom: string;
   assignmentTo: string | null;
   versions: AccrualVersion[];
+  // the recorded start date of the employee, without one tenure counts from the assignment start
+  startDate?: string | null;
 };
 
 export function computeAccrual(input: AccrualInput): { hours: Decimal; detail: AccrualDetail } {
   const bounds = periodBounds(input.period);
   const start = dayNumber(bounds.start);
   const end = dayNumber(bounds.endExclusive);
+  const tenureStart = input.startDate ?? input.assignmentFrom;
 
   // days the assignment is active inside the period, the end date is exclusive like in the database
   const from = Math.max(start, dayNumber(input.assignmentFrom));
@@ -49,19 +81,47 @@ export function computeAccrual(input: AccrualInput): { hours: Decimal; detail: A
     (a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom) || a.versionNo - b.versionNo,
   );
 
+  // walk the active days, at most 31, and pick the rate of each one
+  // consecutive days with the same version and rate end up in one segment
   let weighted = new Decimal(0);
-  const segments: AccrualDetail["segments"] = [];
-  for (const [i, version] of sorted.entries()) {
-    const next = sorted[i + 1];
-    const versionFrom = dayNumber(version.effectiveFrom);
-    const versionTo = next ? dayNumber(next.effectiveFrom) : end;
-    const days = Math.max(0, Math.min(versionTo, to) - Math.max(versionFrom, from));
-    if (days === 0) continue;
+  const segments: AccrualSegment[] = [];
+  for (let day = from; day < to; day++) {
+    const iso = toIso(day);
+
+    // the version in force is the last one in order that started on or before this day
+    let version: AccrualVersion | undefined;
+    for (const candidate of sorted) {
+      if (candidate.effectiveFrom <= iso) version = candidate;
+    }
+    if (!version) continue;
 
     // only time based policies earn here, unlimited and hours worked earn nothing in this feature
-    const monthlyHours = version.config.accrual.kind === "TIME" ? version.config.accrual.hoursPerMonth : "0";
-    weighted = weighted.plus(new Decimal(monthlyHours).times(days));
-    segments.push({ versionNo: version.versionNo, days, monthlyHours });
+    const accrual = version.config.accrual;
+    let monthlyHours = "0";
+    let years: number | undefined;
+    if (accrual.kind === "TIME") {
+      monthlyHours = accrual.hoursPerMonth;
+      if (accrual.tiers) {
+        years = tenureYears(tenureStart, iso);
+        // tiers are ascending, the last one reached wins
+        for (const tier of accrual.tiers) {
+          if (tier.afterYears <= years) monthlyHours = tier.hoursPerMonth;
+        }
+      }
+    }
+    weighted = weighted.plus(monthlyHours);
+
+    const last = segments[segments.length - 1];
+    if (last && last.versionNo === version.versionNo && last.monthlyHours === monthlyHours) {
+      last.days += 1;
+    } else {
+      segments.push({
+        versionNo: version.versionNo,
+        days: 1,
+        monthlyHours,
+        ...(years !== undefined ? { tenureYears: years } : {}),
+      });
+    }
   }
 
   // divide once at the end and round once, half up to 4 decimals

@@ -101,6 +101,14 @@ export async function runAccrual(prisma: PrismaClient, ctx: Ctx, period: string)
     },
   });
 
+  // recorded start dates for tenure tiers, one query for the whole run
+  const startRows = await prisma.employeeStartDate.findMany({
+    where: { companyId: ctx.companyId, employeeId: { in: [...new Set(assignments.map((a) => a.employeeId))] } },
+  });
+  const startDates = new Map<string, string>(
+    startRows.map((r): [string, string] => [r.employeeId, formatDate(r.startDate)]),
+  );
+
   const policyIds = [...new Set(assignments.map((a) => a.policyId))];
   const versionRows = await prisma.policyVersion.findMany({
     where: { policyId: { in: policyIds }, effectiveFrom: { lt: parseDate(bounds.endExclusive) } },
@@ -125,6 +133,7 @@ export async function runAccrual(prisma: PrismaClient, ctx: Ctx, period: string)
       assignmentFrom: formatDate(a.effectiveFrom),
       assignmentTo: a.effectiveTo ? formatDate(a.effectiveTo) : null,
       versions: versionsByPolicy.get(a.policyId) ?? [],
+      startDate: startDates.get(a.employeeId) ?? null,
     });
     const key = `${a.employeeId}:${a.policyId}`;
     const total = totals.get(key) ?? { employeeId: a.employeeId, policyId: a.policyId, hours: new Decimal(0), segments: [] };

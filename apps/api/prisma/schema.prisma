@@ -136,3 +136,14 @@ model TimeOffRequest {
   @@index([companyId, employeeId, startDate(sort: Desc)])
   @@map("time_off_requests")
 }
+model EmployeeStartDate {
+  id         String   @id @db.Uuid
+  companyId  String   @map("company_id") @db.Uuid
+  employeeId String   @map("employee_id")
+  startDate  DateTime @map("start_date") @db.Date
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([companyId, employeeId])
+  @@map("employee_start_dates")
+}
