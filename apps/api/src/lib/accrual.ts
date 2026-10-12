@@ -68,3 +68,66 @@ export function computeAccrual(input: AccrualInput): { hours: Decimal; detail: A
   const hours = weighted.div(bounds.days).toDecimalPlaces(4, Decimal.ROUND_HALF_UP);
   return { hours, detail: { daysInPeriod: bounds.days, segments } };
 }
+
+export type WorkedAccrualDetail = {
+  source: "PAYROLL";
+  hoursWorked: string;
+  activeDays: number;
+  segments: { versionNo: number; days: number; earnHours: string; perHoursWorked: string }[];
+};
+
+type WorkedAccrualInput = {
+  periodStart: string;
+  periodEnd: string;
+  hoursWorked: string;
+  assignmentFrom: string;
+  assignmentTo: string | null;
+  versions: AccrualVersion[];
+};
+
+// pay period accrual: the hours worked are spread evenly over the days the assignment is active in the period
+// and each day earns at the rate of the version in force that day, so a joiner or leaver keeps all their hours
+export function computeWorkedAccrual(input: WorkedAccrualInput): { hours: Decimal; detail: WorkedAccrualDetail } {
+  const start = dayNumber(input.periodStart);
+  const end = dayNumber(input.periodEnd) + 1;
+
+  // days the assignment is active inside the period, the assignment end date is exclusive like in the database
+  const from = Math.max(start, dayNumber(input.assignmentFrom));
+  const to = Math.min(end, input.assignmentTo ? dayNumber(input.assignmentTo) : end);
+  const activeDays = Math.max(0, to - from);
+
+  const sorted = [...input.versions].sort(
+    (a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom) || a.versionNo - b.versionNo,
+  );
+
+  // sum of (days x rate) over the versions, rate is hours earned per hour worked
+  let weightedRate = new Decimal(0);
+  const segments: WorkedAccrualDetail["segments"] = [];
+  for (const [i, version] of sorted.entries()) {
+    const next = sorted[i + 1];
+    const versionFrom = dayNumber(version.effectiveFrom);
+    const versionTo = next ? dayNumber(next.effectiveFrom) : end;
+    const days = Math.max(0, Math.min(versionTo, to) - Math.max(versionFrom, from));
+    if (days === 0) continue;
+
+    // only hours worked versions earn here, a zero perHoursWorked earns nothing instead of dividing by zero
+    const accrual = version.config.accrual;
+    const earns = accrual.kind === "HOURS_WORKED" && !new Decimal(accrual.perHoursWorked).isZero();
+    const earnHours = earns && accrual.kind === "HOURS_WORKED" ? accrual.earnHours : "0";
+    const perHoursWorked = earns && accrual.kind === "HOURS_WORKED" ? accrual.perHoursWorked : "0";
+    if (earns) weightedRate = weightedRate.plus(new Decimal(earnHours).div(perHoursWorked).times(days));
+    segments.push({ versionNo: version.versionNo, days, earnHours, perHoursWorked });
+  }
+
+  const detail: WorkedAccrualDetail = { source: "PAYROLL", hoursWorked: input.hoursWorked, activeDays, segments };
+  if (activeDays === 0) return { hours: new Decimal(0), detail };
+
+  // rates like 1/30 are not exact, so round to 12 places first, that keeps a true half (3.65625) a half
+  // then round once to 4 places, half up
+  const hours = new Decimal(input.hoursWorked)
+    .times(weightedRate)
+    .div(activeDays)
+    .toDecimalPlaces(12)
+    .toDecimalPlaces(4, Decimal.ROUND_HALF_UP);
+  return { hours, detail };
+}

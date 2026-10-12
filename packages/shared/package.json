@@ -7,7 +7,8 @@
     "./health": "./src/health.ts",
     "./policy": "./src/policy.ts",
     "./ledger": "./src/ledger.ts",
-    "./requests": "./src/requests.ts"
+    "./requests": "./src/requests.ts",
+    "./payroll": "./src/payroll.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit"
