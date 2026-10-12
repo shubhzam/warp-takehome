@@ -122,6 +122,7 @@ model TimeOffRequest {
   hours          Decimal   @db.Decimal(10, 4)
   status         String
   reason         String?
+  computation    Json?
   idempotencyKey String    @map("idempotency_key")
   decidedBy      String?   @map("decided_by")
   decidedAt      DateTime? @map("decided_at") @db.Timestamptz(3)
@@ -146,4 +147,44 @@ model EmployeeStartDate {
 
   @@unique([companyId, employeeId])
   @@map("employee_start_dates")
+}
+
+model HolidayCalendar {
+  id        String    @id @db.Uuid
+  companyId String    @map("company_id") @db.Uuid
+  name      String
+  isDefault Boolean   @default(false) @map("is_default")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  holidays  Holiday[]
+
+  @@unique([companyId, name])
+  @@map("holiday_calendars")
+}
+
+model Holiday {
+  calendarId String          @map("calendar_id") @db.Uuid
+  date       DateTime        @db.Date
+  name       String
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  calendar   HolidayCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  @@id([calendarId, date])
+  @@map("holidays")
+}
+
+model EmployeeWorkSchedule {
+  id            String   @id @db.Uuid
+  companyId     String   @map("company_id") @db.Uuid
+  employeeId    String   @map("employee_id")
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  hoursPerDay   Decimal  @map("hours_per_day") @db.Decimal(6, 4)
+  workDays      Int[]    @map("work_days")
+  calendarId    String?  @map("calendar_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([companyId, employeeId, effectiveFrom])
+  @@map("employee_work_schedules")
 }
