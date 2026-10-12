@@ -89,3 +89,39 @@ export function formatDateTime(iso: string): string {
 export function shortId(id: string): string {
   return id.length > 13 ? `${id.slice(0, 8)}...` : id;
 }
+
+// hours are 4 decimal strings, sums run on whole ten thousandths so nothing drifts like a float
+function toUnits(hours: string): number {
+  const negative = hours.startsWith("-");
+  const [whole = "0", fraction = ""] = hours.replace("-", "").split(".");
+  const units = Number(whole) * 10_000 + Number(fraction.padEnd(4, "0").slice(0, 4));
+  return negative ? -units : units;
+}
+
+function fromUnits(units: number): string {
+  const abs = Math.abs(units);
+  return `${units < 0 ? "-" : ""}${Math.floor(abs / 10_000)}.${String(abs % 10_000).padStart(4, "0")}`;
+}
+
+export function sumHours(values: string[]): string {
+  return fromUnits(values.reduce((total, value) => total + toUnits(value), 0));
+}
+
+export function negateHours(hours: string): string {
+  return fromUnits(-toUnits(hours));
+}
+
+export function isNegativeHours(hours: string): boolean {
+  return toUnits(hours) < 0;
+}
+
+export function isZeroHours(hours: string): boolean {
+  return toUnits(hours) === 0;
+}
+
+// share of a whole, for bar widths
+export function ratio(part: string, whole: string): number {
+  const total = toUnits(whole);
+  if (total <= 0) return 0;
+  return Math.min(1, Math.max(0, toUnits(part) / total));
+}
