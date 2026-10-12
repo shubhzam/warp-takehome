@@ -82,6 +82,17 @@ export async function listEmployeeAssignments(prisma: PrismaClient, ctx: Ctx, em
   return rows.map(toAssignmentDto);
 }
 
+// every assignment of one policy, ended ones included, newest start first
+export async function listPolicyAssignments(prisma: PrismaClient, ctx: Ctx, policyId: string) {
+  const policy = await prisma.policy.findFirst({ where: { id: policyId, companyId: ctx.companyId } });
+  if (!policy) throw new AppError(404, "NOT_FOUND", "policy not found");
+  const rows = await prisma.assignment.findMany({
+    where: { companyId: ctx.companyId, policyId },
+    orderBy: [{ effectiveFrom: "desc" }, { employeeId: "asc" }],
+  });
+  return { assignments: rows.map(toAssignmentDto) };
+}
+
 export async function endAssignment(prisma: PrismaClient, ctx: Ctx, assignmentId: string, input: EndInput) {
   try {
     return await prisma.$transaction(async (tx) => {

@@ -5,6 +5,8 @@ import { requireAdmin, requireUser } from "./lib/auth";
 import { prisma } from "./lib/db";
 import { errorHandler } from "./lib/errors";
 import { assignmentsRouter, employeesRouter } from "./routes/assignments";
+import { auditRouter } from "./routes/audit";
+import { meRouter } from "./routes/me";
 import { policiesRouter } from "./routes/policies";
 import { accrualRunsRouter, adjustmentsRouter, employeeLedgerRouter } from "./routes/ledger";
 import { requestsRouter } from "./routes/requests";
@@ -56,6 +58,9 @@ app.use("/requests", requireUser, requestsRouter);
 app.use("/payroll-accruals", requireAdmin, payrollRouter);
 app.use("/employees", requireAdmin, startDatesRouter);
 app.use("/year-end-runs", requireAdmin, yearEndRouter);
+app.use("/audit-events", requireAdmin, auditRouter);
+// self service reads, any role, always scoped to the caller
+app.use("/me", requireUser, meRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: { code: "NOT_FOUND", message: "route not found" } });

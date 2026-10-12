@@ -3,7 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { getCtx } from "../lib/auth";
 import { prisma } from "../lib/db";
-import { assignEmployees } from "../services/assignments";
+import { assignEmployees, listPolicyAssignments } from "../services/assignments";
 import { createPolicy, createVersion, getPolicy, listPolicies } from "../services/policies";
 
 const idSchema = z.guid();
@@ -30,6 +30,11 @@ policiesRouter.post("/:id/versions", async (req, res) => {
   const id = idSchema.parse(req.params.id);
   const input = createVersionBody.parse(req.body);
   res.status(201).json(await createVersion(prisma, getCtx(res), id, input));
+});
+
+policiesRouter.get("/:id/assignments", async (req, res) => {
+  const id = idSchema.parse(req.params.id);
+  res.json(await listPolicyAssignments(prisma, getCtx(res), id));
 });
 
 policiesRouter.post("/:id/assignments", async (req, res) => {

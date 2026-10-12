@@ -10,7 +10,8 @@
     "./requests": "./src/requests.ts",
     "./payroll": "./src/payroll.ts",
     "./tenure": "./src/tenure.ts",
-    "./year-end": "./src/year-end.ts"
+    "./year-end": "./src/year-end.ts",
+    "./audit": "./src/audit.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit"
