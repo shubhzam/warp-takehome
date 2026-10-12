@@ -1257,3 +1257,31 @@ textarea.input {
   color: var(--muted);
   background: var(--surface);
 }
+
+.audit-list {
+  margin: 0;
+}
+
+.audit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.audit-line {
+  display: flex;
+  align-items: center;
+  gap: 6px 12px;
+  flex-wrap: wrap;
+}
+
+.diff-before {
+  color: var(--danger-text);
+}
+
+.diff-after {
+  color: var(--ok-text);
+}
