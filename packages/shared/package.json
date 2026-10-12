@@ -11,7 +11,8 @@
     "./payroll": "./src/payroll.ts",
     "./tenure": "./src/tenure.ts",
     "./year-end": "./src/year-end.ts",
-    "./audit": "./src/audit.ts"
+    "./audit": "./src/audit.ts",
+    "./schedule": "./src/schedule.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit"

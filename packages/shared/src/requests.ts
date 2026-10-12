@@ -12,7 +12,8 @@ export const createRequestBody = z
     type: z.enum(timeOffTypes),
     startDate: z.iso.date(),
     endDate: z.iso.date(),
-    hours: positiveHours,
+    // omitted means every scheduled hour of the range, the server prices it
+    hours: positiveHours.optional(),
     reason: z.string().trim().max(500).optional(),
     idempotencyKey: z.string().min(1).max(100),
   })

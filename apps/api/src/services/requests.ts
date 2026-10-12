@@ -50,12 +50,16 @@ export async function createRequest(prisma: PrismaClient, ctx: Ctx, input: Creat
     throw new AppError(403, "FORBIDDEN", "employees can only submit their own requests");
   }
 
+  // hours became optional in the body, pricing from the schedule replaces this guard in the submit rule change
+  const hours = input.hours;
+  if (hours === undefined) throw new AppError(422, "HOURS_REQUIRED", "hours is required");
+
   // nobody can take more than 24 hours a day
   const start = parseDate(input.startDate);
   const end = parseDate(input.endDate);
   const days = (end.getTime() - start.getTime()) / 86_400_000 + 1;
-  if (new Decimal(input.hours).gt(days * 24)) {
-    throw new AppError(422, "HOURS_TOO_LARGE", `${days} day(s) cannot hold ${input.hours} hours`);
+  if (new Decimal(hours).gt(days * 24)) {
+    throw new AppError(422, "HOURS_TOO_LARGE", `${days} day(s) cannot hold ${hours} hours`);
   }
 
   // the policy comes from the assignment that covers every day of the request
@@ -83,7 +87,7 @@ export async function createRequest(prisma: PrismaClient, ctx: Ctx, input: Creat
           type: input.type,
           startDate: start,
           endDate: end,
-          hours: input.hours,
+          hours,
           status: "PENDING",
           reason: input.reason,
           idempotencyKey: input.idempotencyKey,
@@ -99,7 +103,7 @@ export async function createRequest(prisma: PrismaClient, ctx: Ctx, input: Creat
           type: input.type,
           startDate: input.startDate,
           endDate: input.endDate,
-          hours: input.hours,
+          hours,
           status: "PENDING",
         },
         reason: input.reason,
@@ -118,7 +122,7 @@ export async function createRequest(prisma: PrismaClient, ctx: Ctx, input: Creat
           existing.type === input.type &&
           formatDate(existing.startDate) === input.startDate &&
           formatDate(existing.endDate) === input.endDate &&
-          new Decimal(existing.hours.toString()).equals(new Decimal(input.hours));
+          new Decimal(existing.hours.toString()).equals(new Decimal(hours));
         if (!same) throw new AppError(409, "IDEMPOTENCY_KEY_REUSED", "this key was already used for a different request");
         return { request: toRequestDto(existing), replayed: true };
       }
