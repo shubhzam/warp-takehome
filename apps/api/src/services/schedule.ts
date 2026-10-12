@@ -8,7 +8,7 @@ import { writeAudit } from "../lib/audit";
 import type { Ctx } from "../lib/auth";
 import { formatDate, parseDate, todayUtc } from "../lib/dates";
 import { AppError } from "../lib/errors";
-import { standardSchedule } from "../lib/schedule";
+import { type ScheduleRow, priceRange, standardSchedule } from "../lib/schedule";
 
 type CreateCalendarInput = z.infer<typeof createCalendarBody>;
 type SetHolidaysInput = z.infer<typeof setHolidaysBody>;
@@ -240,4 +240,51 @@ export async function setWorkSchedule(prisma: PrismaClient, ctx: Ctx, employeeId
     if (!isUniqueError(err)) throw err;
     return await writeSchedule(prisma, ctx, employeeId, input);
   }
+}
+
+// loads what the pricing rule needs and prices the range, takes the transaction client so submit reads in its own transaction
+export async function priceForEmployee(
+  db: Prisma.TransactionClient,
+  ctx: Ctx,
+  employeeId: string,
+  startDate: string,
+  endDate: string,
+) {
+  // rows after the last day cannot apply to it, older rows decide the days before the first change
+  const rows = await db.employeeWorkSchedule.findMany({
+    where: { companyId: ctx.companyId, employeeId, effectiveFrom: { lte: parseDate(endDate) } },
+  });
+  const defaultCalendar = await db.holidayCalendar.findFirst({ where: { companyId: ctx.companyId, isDefault: true } });
+
+  const schedules: ScheduleRow[] = rows.map((r) => ({
+    effectiveFrom: formatDate(r.effectiveFrom),
+    hoursPerDay: r.hoursPerDay.toFixed(4),
+    workDays: r.workDays,
+    calendarId: r.calendarId,
+  }));
+
+  // the holidays of every calendar a day in the range can use, inside the range only
+  const calendarIds = new Set<string>();
+  for (const s of schedules) if (s.calendarId) calendarIds.add(s.calendarId);
+  if (defaultCalendar) calendarIds.add(defaultCalendar.id);
+
+  const holidaysByCalendar = new Map<string, Map<string, string>>();
+  if (calendarIds.size > 0) {
+    const holidays = await db.holiday.findMany({
+      where: { calendarId: { in: [...calendarIds] }, date: { gte: parseDate(startDate), lte: parseDate(endDate) } },
+    });
+    for (const h of holidays) {
+      const dates = holidaysByCalendar.get(h.calendarId) ?? new Map<string, string>();
+      dates.set(formatDate(h.date), h.name);
+      holidaysByCalendar.set(h.calendarId, dates);
+    }
+  }
+
+  return priceRange({
+    startDate,
+    endDate,
+    schedules,
+    holidaysByCalendar,
+    defaultCalendarId: defaultCalendar?.id ?? null,
+  });
 }

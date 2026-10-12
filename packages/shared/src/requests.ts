@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { timeOffTypes } from "./policy";
 
+// a request spans at most a year, the preview has the same limit
+const maxRangeDays = 366;
+
 // positive hours, up to 4 decimals, zero is refused
 const positiveHours = z.string().regex(/^(?!0+(\.0+)?$)\d+(\.\d{1,4})?$/);
 
@@ -17,7 +20,10 @@ export const createRequestBody = z
     reason: z.string().trim().max(500).optional(),
     idempotencyKey: z.string().min(1).max(100),
   })
-  .refine((b) => b.startDate <= b.endDate, { message: "startDate must not be after endDate" });
+  .refine((b) => b.startDate <= b.endDate, { message: "startDate must not be after endDate" })
+  .refine((b) => (Date.parse(b.endDate) - Date.parse(b.startDate)) / 86_400_000 < maxRangeDays, {
+    message: `a request spans at most ${maxRangeDays} days`,
+  });
 
 export const decisionBody = z.object({ reason: z.string().trim().max(500).optional() });
 export const rejectBody = z.object({ reason: z.string().trim().min(1).max(500) });

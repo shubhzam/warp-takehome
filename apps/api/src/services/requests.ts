@@ -1,5 +1,6 @@
 import { policyConfigSchema } from "@repo/shared/policy";
 import type { createRequestBody, decisionBody, listRequestsQuery, rejectBody } from "@repo/shared/requests";
+import type { previewQuery } from "@repo/shared/schedule";
 import { Decimal } from "decimal.js";
 import { uuidv7 } from "uuidv7";
 import type { z } from "zod";
@@ -11,11 +12,13 @@ import { formatDate, parseDate, todayUtc } from "../lib/dates";
 import { AppError } from "../lib/errors";
 import { lockBalance, postEntry } from "./ledger";
 import { versionInForce } from "./policies";
+import { priceForEmployee } from "./schedule";
 
 type CreateInput = z.infer<typeof createRequestBody>;
 type ListQuery = z.infer<typeof listRequestsQuery>;
 type DecisionInput = z.infer<typeof decisionBody>;
 type RejectInput = z.infer<typeof rejectBody>;
+type PreviewQuery = z.infer<typeof previewQuery>;
 
 export const toRequestDto = (r: TimeOffRequest) => ({
   id: r.id,
@@ -27,6 +30,8 @@ export const toRequestDto = (r: TimeOffRequest) => ({
   hours: r.hours.toFixed(4),
   status: r.status,
   reason: r.reason,
+  // how the hours were priced, null on requests made before schedules existed
+  computation: r.computation,
   decidedBy: r.decidedBy,
   decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null,
   decisionReason: r.decisionReason,
@@ -44,23 +49,37 @@ function isUniqueError(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
 }
 
+// the stored request for an idempotency key, if there is one
+const findByKey = (db: Prisma.TransactionClient, ctx: Ctx, idempotencyKey: string) =>
+  db.timeOffRequest.findUnique({ where: { companyId_idempotencyKey: { companyId: ctx.companyId, idempotencyKey } } });
+
+// the same key with the same content is the same request, anything else is a client bug
+// when hours was omitted the stored total came from the schedule of that day, so only the shape is compared
+function replayOf(existing: TimeOffRequest, input: CreateInput) {
+  const sameShape =
+    existing.employeeId === input.employeeId &&
+    existing.type === input.type &&
+    formatDate(existing.startDate) === input.startDate &&
+    formatDate(existing.endDate) === input.endDate;
+  const sameHours = input.hours === undefined || new Decimal(existing.hours.toString()).equals(new Decimal(input.hours));
+  if (!sameShape || !sameHours) {
+    throw new AppError(409, "IDEMPOTENCY_KEY_REUSED", "this key was already used for a different request");
+  }
+  return { request: toRequestDto(existing), replayed: true };
+}
+
 export async function createRequest(prisma: PrismaClient, ctx: Ctx, input: CreateInput) {
   // an employee can only ask for themselves
   if (ctx.role === "EMPLOYEE" && input.employeeId !== ctx.userId) {
     throw new AppError(403, "FORBIDDEN", "employees can only submit their own requests");
   }
 
-  // hours became optional in the body, pricing from the schedule replaces this guard in the submit rule change
-  const hours = input.hours;
-  if (hours === undefined) throw new AppError(422, "HOURS_REQUIRED", "hours is required");
+  // a replay never reprices, a schedule or a holiday may have changed since the first submit
+  const earlier = await findByKey(prisma, ctx, input.idempotencyKey);
+  if (earlier) return replayOf(earlier, input);
 
-  // nobody can take more than 24 hours a day
   const start = parseDate(input.startDate);
   const end = parseDate(input.endDate);
-  const days = (end.getTime() - start.getTime()) / 86_400_000 + 1;
-  if (new Decimal(hours).gt(days * 24)) {
-    throw new AppError(422, "HOURS_TOO_LARGE", `${days} day(s) cannot hold ${hours} hours`);
-  }
 
   // the policy comes from the assignment that covers every day of the request
   const assignment = await prisma.assignment.findFirst({
@@ -78,6 +97,23 @@ export async function createRequest(prisma: PrismaClient, ctx: Ctx, input: Creat
 
   try {
     return await prisma.$transaction(async (tx) => {
+      // priced inside the transaction, the breakdown stored with the request is the record of how the hours were reached
+      const priced = await priceForEmployee(tx, ctx, input.employeeId, input.startDate, input.endDate);
+      if (priced.hours.isZero()) {
+        throw new AppError(422, "NO_WORKING_DAYS", `${input.startDate} to ${input.endDate} has no working day for ${input.employeeId}`);
+      }
+
+      // the schedule is the cap, a smaller number is a partial request
+      const given = input.hours === undefined ? null : new Decimal(input.hours);
+      if (given && given.gt(priced.hours)) {
+        throw new AppError(
+          422,
+          "HOURS_TOO_LARGE",
+          `${given.toFixed(4)} hours requested, the range holds ${priced.hours.toFixed(4)} hours of scheduled work`,
+        );
+      }
+      const hours = given ?? priced.hours;
+
       const row = await tx.timeOffRequest.create({
         data: {
           id: uuidv7(),
@@ -87,9 +123,10 @@ export async function createRequest(prisma: PrismaClient, ctx: Ctx, input: Creat
           type: input.type,
           startDate: start,
           endDate: end,
-          hours,
+          hours: hours.toFixed(4),
           status: "PENDING",
           reason: input.reason,
+          computation: { source: given ? "GIVEN" : "COMPUTED", scheduledHours: priced.hours.toFixed(4), days: priced.days },
           idempotencyKey: input.idempotencyKey,
           createdBy: ctx.userId,
         },
@@ -103,7 +140,7 @@ export async function createRequest(prisma: PrismaClient, ctx: Ctx, input: Creat
           type: input.type,
           startDate: input.startDate,
           endDate: input.endDate,
-          hours,
+          hours: hours.toFixed(4),
           status: "PENDING",
         },
         reason: input.reason,
@@ -112,26 +149,31 @@ export async function createRequest(prisma: PrismaClient, ctx: Ctx, input: Creat
     });
   } catch (err) {
     if (isUniqueError(err) || isOverlapError(err)) {
-      // a replay hits both the key and the overlap rule, so look for the key first
-      const existing = await prisma.timeOffRequest.findUnique({
-        where: { companyId_idempotencyKey: { companyId: ctx.companyId, idempotencyKey: input.idempotencyKey } },
-      });
-      if (existing) {
-        const same =
-          existing.employeeId === input.employeeId &&
-          existing.type === input.type &&
-          formatDate(existing.startDate) === input.startDate &&
-          formatDate(existing.endDate) === input.endDate &&
-          new Decimal(existing.hours.toString()).equals(new Decimal(hours));
-        if (!same) throw new AppError(409, "IDEMPOTENCY_KEY_REUSED", "this key was already used for a different request");
-        return { request: toRequestDto(existing), replayed: true };
-      }
+      // two first submits with one key race to the same rows, the loser finds the winner here
+      const existing = await findByKey(prisma, ctx, input.idempotencyKey);
+      if (existing) return replayOf(existing, input);
       if (isOverlapError(err)) {
         throw new AppError(409, "REQUEST_OVERLAP", "this employee already has a pending or approved request on those days");
       }
     }
     throw err;
   }
+}
+
+// the breakdown a submit would store, nothing is written
+export async function previewRequest(prisma: PrismaClient, ctx: Ctx, query: PreviewQuery) {
+  // an employee prices their own days, an admin may price anyone's
+  if (ctx.role === "EMPLOYEE" && query.employeeId !== ctx.userId) {
+    throw new AppError(403, "FORBIDDEN", "employees can only preview their own requests");
+  }
+  const priced = await priceForEmployee(prisma, ctx, query.employeeId, query.startDate, query.endDate);
+  return {
+    employeeId: query.employeeId,
+    startDate: query.startDate,
+    endDate: query.endDate,
+    hours: priced.hours.toFixed(4),
+    days: priced.days,
+  };
 }
 
 export async function listRequests(prisma: PrismaClient, ctx: Ctx, query: ListQuery) {

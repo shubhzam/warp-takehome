@@ -1,4 +1,5 @@
 import { createRequestBody, decisionBody, listRequestsQuery, rejectBody } from "@repo/shared/requests";
+import { previewQuery } from "@repo/shared/schedule";
 import { Router } from "express";
 import { z } from "zod";
 import { getCtx, requireAdmin } from "../lib/auth";
@@ -9,6 +10,7 @@ import {
   createRequest,
   getRequest,
   listRequests,
+  previewRequest,
   rejectRequest,
 } from "../services/requests";
 
@@ -26,6 +28,11 @@ requestsRouter.post("/", async (req, res) => {
 // GET /requests?status=&employeeId= - employees only get their own
 requestsRouter.get("/", async (req, res) => {
   res.json(await listRequests(prisma, getCtx(res), listRequestsQuery.parse(req.query)));
+});
+
+// GET /requests/preview?employeeId=&startDate=&endDate= - what a submit would cost, must come before /:id
+requestsRouter.get("/preview", async (req, res) => {
+  res.json(await previewRequest(prisma, getCtx(res), previewQuery.parse(req.query)));
 });
 
 requestsRouter.get("/:id", async (req, res) => {
