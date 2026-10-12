@@ -24,8 +24,8 @@ call -X POST $BASE/accrual-runs -d '{"period":"2025-11"}'
 call -X POST $BASE/accrual-runs -d '{"period":"2025-12"}'
 show
 
-echo; echo "--- 2. retroactive request for emp_5513, 24 hours on 2025-12-10 to 12-11, approved - expect -4.0000"
-REQ=$(curl -s "${H[@]}" -X POST $BASE/requests -d '{"employeeId":"emp_5513","type":"VACATION","startDate":"2025-12-10","endDate":"2025-12-11","hours":"24","reason":"entered late","idempotencyKey":"retro-5513"}' | jq -r '.id // .request.id')
+echo; echo "--- 2. retroactive request for emp_5513, 24 hours on 2025-12-09 to 12-11 (three weekdays of 8 hours), approved - expect -4.0000"
+REQ=$(curl -s "${H[@]}" -X POST $BASE/requests -d '{"employeeId":"emp_5513","type":"VACATION","startDate":"2025-12-09","endDate":"2025-12-11","hours":"24","reason":"entered late","idempotencyKey":"retro-5513"}' | jq -r '.id // .request.id')
 call -X POST $BASE/requests/$REQ/approve -d '{}' | cut -c1-120
 show
 

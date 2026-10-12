@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # end to end check for requests and approvals - run from the repo root with the api up on :4000
 # needs jq. uses a fresh company each run, dates are hard coded around 2026-10-12 (nov dates stay in the future until 2026-11-02)
+# the company has no schedules and no calendar, so every employee works the standard week: 8 hours, monday to friday.
+# every date below is a weekday and no request asks for more hours than its days hold
 BASE=${BASE:-http://localhost:4000}
 CO=$(uuidgen | tr 'A-Z' 'a-z')
 psql_run() { docker compose exec -T postgres psql -U warp -d timeoff -c "$1" 2>&1; }
@@ -98,9 +100,10 @@ call $BASE/requests/$A
 as emp_3301
 echo -n "emp_3301 sees: "; raw $BASE/requests | jq length
 
-echo; echo "--- 11. validation: expect 422 HOURS_TOO_LARGE, 422 NOT_ASSIGNED"
+echo; echo "--- 11. validation: expect 422 HOURS_TOO_LARGE for 25 and for 9 on one 8 hour day, 422 NOT_ASSIGNED"
 as ADMIN
 call -X POST $BASE/requests -d "$(req emp_3301 2026-11-23 2026-11-23 25 v1)"
+call -X POST $BASE/requests -d "$(req emp_3301 2026-11-23 2026-11-23 9 v3)"
 call -X POST $BASE/requests -d "$(req emp_3303 2026-11-23 2026-11-23 8 v2)"
 
 echo; echo "--- 12. negative balance on a policy with maxNegativeHours 8: C and D approved, balance -8.0000, then G of 1h refused"
