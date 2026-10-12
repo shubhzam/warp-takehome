@@ -65,6 +65,27 @@ export async function postEntry(tx: Prisma.TransactionClient, e: NewEntry): Prom
   return Number(rows[0]?.inserted ?? 0) === 1;
 }
 
+// locks the balance row until the transaction ends and returns what it holds
+// the row is created with 0 first, so an employee who was never accrued can still be locked
+export async function lockBalance(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  employeeId: string,
+  policyId: string,
+): Promise<Decimal> {
+  await tx.$executeRaw`
+    INSERT INTO balances (employee_id, policy_id, company_id, hours)
+    VALUES (${employeeId}, ${policyId}::uuid, ${companyId}::uuid, 0)
+    ON CONFLICT (employee_id, policy_id) DO NOTHING`;
+  const rows = await tx.$queryRaw<{ hours: string }[]>`
+    SELECT hours::text AS hours FROM balances
+    WHERE employee_id = ${employeeId} AND policy_id = ${policyId}::uuid
+    FOR UPDATE`;
+  const row = rows[0];
+  if (!row) throw new Error("balance row missing after insert");
+  return new Decimal(row.hours);
+}
+
 export async function runAccrual(prisma: PrismaClient, ctx: Ctx, period: string) {
   const bounds = periodBounds(period);
   // hours are earned in arrears, so the period has to be over

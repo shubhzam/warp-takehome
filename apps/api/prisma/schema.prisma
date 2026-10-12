@@ -22,6 +22,7 @@ model Policy {
   assignments   Assignment[]
   ledgerEntries LedgerEntry[]
   balances      Balance[]
+  requests      TimeOffRequest[]
 
   @@unique([companyId, name])
   @@map("policies")
@@ -108,4 +109,30 @@ model Balance {
   @@id([employeeId, policyId])
   @@index([companyId, employeeId])
   @@map("balances")
+}
+
+model TimeOffRequest {
+  id             String    @id @db.Uuid
+  companyId      String    @map("company_id") @db.Uuid
+  employeeId     String    @map("employee_id")
+  policyId       String    @map("policy_id") @db.Uuid
+  type           String
+  startDate      DateTime  @map("start_date") @db.Date
+  endDate        DateTime  @map("end_date") @db.Date
+  hours          Decimal   @db.Decimal(10, 4)
+  status         String
+  reason         String?
+  idempotencyKey String    @map("idempotency_key")
+  decidedBy      String?   @map("decided_by")
+  decidedAt      DateTime? @map("decided_at") @db.Timestamptz(3)
+  decisionReason String?   @map("decision_reason")
+  createdBy      String    @map("created_by")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  policy         Policy    @relation(fields: [policyId], references: [id])
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, status, createdAt(sort: Desc)])
+  @@index([companyId, employeeId, startDate(sort: Desc)])
+  @@map("time_off_requests")
 }

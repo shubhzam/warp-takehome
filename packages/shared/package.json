@@ -6,7 +6,8 @@
   "exports": {
     "./health": "./src/health.ts",
     "./policy": "./src/policy.ts",
-    "./ledger": "./src/ledger.ts"
+    "./ledger": "./src/ledger.ts",
+    "./requests": "./src/requests.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit"
