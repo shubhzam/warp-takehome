@@ -6,6 +6,7 @@ import { prisma } from "./lib/db";
 import { errorHandler } from "./lib/errors";
 import { assignmentsRouter, employeesRouter } from "./routes/assignments";
 import { policiesRouter } from "./routes/policies";
+import { accrualRunsRouter, adjustmentsRouter, employeeLedgerRouter } from "./routes/ledger";
 
 // runs SELECT 1 and gives up after dbTimeoutMs, so /health never hangs
 async function isDatabaseUp(): Promise<boolean> {
@@ -44,6 +45,10 @@ app.get("/health", async (_req, res) => {
 app.use("/policies", requireAdmin, policiesRouter);
 app.use("/assignments", requireAdmin, assignmentsRouter);
 app.use("/employees", requireAdmin, employeesRouter);
+app.use("/accrual-runs", requireAdmin, accrualRunsRouter);
+app.use("/adjustments", requireAdmin, adjustmentsRouter);
+// second router on /employees, express falls through when the first one has no match
+app.use("/employees", requireAdmin, employeeLedgerRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: { code: "NOT_FOUND", message: "route not found" } });

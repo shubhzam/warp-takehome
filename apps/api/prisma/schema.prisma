@@ -13,13 +13,15 @@ datasource db {
 }
 
 model Policy {
-  id          String          @id @db.Uuid
-  companyId   String          @map("company_id") @db.Uuid
-  name        String
-  type        String
-  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  versions    PolicyVersion[]
-  assignments Assignment[]
+  id            String          @id @db.Uuid
+  companyId     String          @map("company_id") @db.Uuid
+  name          String
+  type          String
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  versions      PolicyVersion[]
+  assignments   Assignment[]
+  ledgerEntries LedgerEntry[]
+  balances      Balance[]
 
   @@unique([companyId, name])
   @@map("policies")
@@ -53,6 +55,7 @@ model Assignment {
   policy        Policy    @relation(fields: [policyId], references: [id])
 
   @@index([policyId, effectiveFrom])
+  @@index([companyId, effectiveFrom])
   @@map("assignments")
 }
 
@@ -71,4 +74,38 @@ model AuditEvent {
 
   @@index([companyId, entityType, entityId, createdAt(sort: Desc)])
   @@map("audit_events")
+}
+
+model LedgerEntry {
+  id             String   @id @db.Uuid
+  companyId      String   @map("company_id") @db.Uuid
+  employeeId     String   @map("employee_id")
+  policyId       String   @map("policy_id") @db.Uuid
+  kind           String
+  hours          Decimal  @db.Decimal(10, 4)
+  occurredOn     DateTime @map("occurred_on") @db.Date
+  period         String?
+  idempotencyKey String   @map("idempotency_key")
+  detail         Json?
+  reason         String?
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  policy         Policy   @relation(fields: [policyId], references: [id])
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, employeeId, policyId, occurredOn(sort: Desc)])
+  @@map("ledger_entries")
+}
+
+model Balance {
+  employeeId String   @map("employee_id")
+  policyId   String   @map("policy_id") @db.Uuid
+  companyId  String   @map("company_id") @db.Uuid
+  hours      Decimal  @default(0) @db.Decimal(10, 4)
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  policy     Policy   @relation(fields: [policyId], references: [id])
+
+  @@id([employeeId, policyId])
+  @@index([companyId, employeeId])
+  @@map("balances")
 }

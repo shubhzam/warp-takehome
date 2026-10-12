@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./health": "./src/health.ts",
-    "./policy": "./src/policy.ts"
+    "./policy": "./src/policy.ts",
+    "./ledger": "./src/ledger.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit"
