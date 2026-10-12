@@ -1,18 +1,11 @@
-import { PrismaPg } from "@prisma/adapter-pg";
 import { type HealthResponse, healthResponseSchema } from "@repo/shared/health";
-import express, { type ErrorRequestHandler } from "express";
-import { AppConfig } from "./config";
-import { PrismaClient } from "./generated/prisma/client";
-
-const config = AppConfig.fromEnv();
-
-const prisma = new PrismaClient({
-  adapter: new PrismaPg({
-    connectionString: config.databaseUrl,
-    // stop a dead database from hanging a request on pool checkout
-    connectionTimeoutMillis: config.dbTimeoutMs,
-  }),
-});
+import express from "express";
+import { config } from "./config";
+import { requireAdmin } from "./lib/auth";
+import { prisma } from "./lib/db";
+import { errorHandler } from "./lib/errors";
+import { assignmentsRouter, employeesRouter } from "./routes/assignments";
+import { policiesRouter } from "./routes/policies";
 
 // runs SELECT 1 and gives up after dbTimeoutMs, so /health never hangs
 async function isDatabaseUp(): Promise<boolean> {
@@ -35,6 +28,7 @@ async function isDatabaseUp(): Promise<boolean> {
 
 const app = express();
 app.disable("x-powered-by");
+app.use(express.json());
 
 app.get("/health", async (_req, res) => {
   const dbUp = await isDatabaseUp();
@@ -46,16 +40,16 @@ app.get("/health", async (_req, res) => {
   res.status(dbUp ? 200 : 503).json(body);
 });
 
+// every feature route needs an admin, health stays public
+app.use("/policies", requireAdmin, policiesRouter);
+app.use("/assignments", requireAdmin, assignmentsRouter);
+app.use("/employees", requireAdmin, employeesRouter);
+
 app.use((_req, res) => {
   res.status(404).json({ error: { code: "NOT_FOUND", message: "route not found" } });
 });
 
 // express 5 forwards rejected async handlers here, no try/catch needed in routes
-const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
-  const reason = err instanceof Error ? (err.stack ?? err.message) : String(err);
-  console.error(`unhandled error: ${reason}`);
-  res.status(500).json({ error: { code: "INTERNAL", message: "internal server error" } });
-};
 app.use(errorHandler);
 
 const server = app.listen(config.port, () => {

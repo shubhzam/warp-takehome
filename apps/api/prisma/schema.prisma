@@ -11,3 +11,64 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model Policy {
+  id          String          @id @db.Uuid
+  companyId   String          @map("company_id") @db.Uuid
+  name        String
+  type        String
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  versions    PolicyVersion[]
+  assignments Assignment[]
+
+  @@unique([companyId, name])
+  @@map("policies")
+}
+
+model PolicyVersion {
+  id            String   @id @db.Uuid
+  policyId      String   @map("policy_id") @db.Uuid
+  versionNo     Int      @map("version_no")
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  config        Json
+  createdBy     String   @map("created_by")
+  reason        String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  policy        Policy   @relation(fields: [policyId], references: [id])
+
+  @@unique([policyId, versionNo])
+  @@index([policyId, effectiveFrom(sort: Desc), versionNo(sort: Desc)])
+  @@map("policy_versions")
+}
+
+model Assignment {
+  id            String    @id @db.Uuid
+  companyId     String    @map("company_id") @db.Uuid
+  employeeId    String    @map("employee_id")
+  policyId      String    @map("policy_id") @db.Uuid
+  type          String
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  effectiveTo   DateTime? @map("effective_to") @db.Date
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  policy        Policy    @relation(fields: [policyId], references: [id])
+
+  @@index([policyId, effectiveFrom])
+  @@map("assignments")
+}
+
+model AuditEvent {
+  id         String   @id @db.Uuid
+  companyId  String   @map("company_id") @db.Uuid
+  actorId    String   @map("actor_id")
+  actorRole  String   @map("actor_role")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id") @db.Uuid
+  before     Json?
+  after      Json?
+  reason     String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([companyId, entityType, entityId, createdAt(sort: Desc)])
+  @@map("audit_events")
+}

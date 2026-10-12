@@ -30,3 +30,5 @@ export class AppConfig {
     return new AppConfig(parsed.data);
   }
 }
+
+export const config = AppConfig.fromEnv();
