@@ -10,7 +10,7 @@ import { meRouter } from "./routes/me";
 import { policiesRouter } from "./routes/policies";
 import { accrualRunsRouter, adjustmentsRouter, employeeLedgerRouter } from "./routes/ledger";
 import { requestsRouter } from "./routes/requests";
-import { calendarsRouter } from "./routes/schedule";
+import { calendarsRouter, workScheduleRouter } from "./routes/schedule";
 import { payrollRouter } from "./routes/payroll";
 import { startDatesRouter } from "./routes/tenure";
 import { yearEndRouter } from "./routes/yearEnd";
@@ -60,6 +60,7 @@ app.use("/payroll-accruals", requireAdmin, payrollRouter);
 app.use("/employees", requireAdmin, startDatesRouter);
 app.use("/year-end-runs", requireAdmin, yearEndRouter);
 app.use("/holiday-calendars", requireAdmin, calendarsRouter);
+app.use("/employees", requireAdmin, workScheduleRouter);
 app.use("/audit-events", requireAdmin, auditRouter);
 // self service reads, any role, always scoped to the caller
 app.use("/me", requireUser, meRouter);

@@ -1,15 +1,29 @@
-import type { createCalendarBody, setHolidaysBody } from "@repo/shared/schedule";
+import type { createCalendarBody, setHolidaysBody, setWorkScheduleBody } from "@repo/shared/schedule";
+import { Decimal } from "decimal.js";
 import { uuidv7 } from "uuidv7";
 import type { z } from "zod";
 import { Prisma } from "../generated/prisma/client";
-import type { HolidayCalendar, PrismaClient } from "../generated/prisma/client";
+import type { EmployeeWorkSchedule, HolidayCalendar, PrismaClient } from "../generated/prisma/client";
 import { writeAudit } from "../lib/audit";
 import type { Ctx } from "../lib/auth";
-import { formatDate, parseDate } from "../lib/dates";
+import { formatDate, parseDate, todayUtc } from "../lib/dates";
 import { AppError } from "../lib/errors";
+import { standardSchedule } from "../lib/schedule";
 
 type CreateCalendarInput = z.infer<typeof createCalendarBody>;
 type SetHolidaysInput = z.infer<typeof setHolidaysBody>;
+type SetScheduleInput = z.infer<typeof setWorkScheduleBody>;
+
+// source says where the numbers came from, STANDARD is the fallback when no row is in force and has no id or start
+export type ScheduleDto = {
+  id: string | null;
+  employeeId: string;
+  effectiveFrom: string | null;
+  hoursPerDay: string;
+  workDays: number[];
+  calendarId: string | null;
+  source: "SCHEDULE" | "STANDARD";
+};
 
 // a transaction can take a while with a hundred holidays, same allowance as a big assignment
 const BULK_TX_TIMEOUT_MS = 10_000;
@@ -132,4 +146,98 @@ export async function removeHoliday(prisma: PrismaClient, ctx: Ctx, calendarId: 
     });
     return removed;
   });
+}
+
+const toScheduleDto = (r: EmployeeWorkSchedule): ScheduleDto => ({
+  id: r.id,
+  employeeId: r.employeeId,
+  effectiveFrom: formatDate(r.effectiveFrom),
+  hoursPerDay: r.hoursPerDay.toFixed(4),
+  workDays: r.workDays,
+  calendarId: r.calendarId,
+  source: "SCHEDULE",
+});
+
+const toStandardDto = (employeeId: string): ScheduleDto => ({
+  id: null,
+  employeeId,
+  effectiveFrom: null,
+  hoursPerDay: new Decimal(standardSchedule.hoursPerDay).toFixed(4),
+  workDays: standardSchedule.workDays,
+  calendarId: standardSchedule.calendarId,
+  source: "STANDARD",
+});
+
+// what the audit row keeps of a schedule, the effective date is part of the row identity
+const toAuditValues = (r: EmployeeWorkSchedule) => ({
+  employeeId: r.employeeId,
+  effectiveFrom: formatDate(r.effectiveFrom),
+  hoursPerDay: r.hoursPerDay.toFixed(4),
+  workDays: r.workDays,
+  calendarId: r.calendarId,
+});
+
+// the schedule in force on a day plus every row, newest first, the standard schedule when nothing is in force yet
+export async function getWorkSchedule(prisma: PrismaClient, ctx: Ctx, employeeId: string, asOf?: string) {
+  const day = asOf ?? todayUtc();
+  const rows = await prisma.employeeWorkSchedule.findMany({
+    where: { companyId: ctx.companyId, employeeId },
+    orderBy: { effectiveFrom: "desc" },
+  });
+  const current = rows.find((r) => formatDate(r.effectiveFrom) <= day);
+  return { inForce: current ? toScheduleDto(current) : toStandardDto(employeeId), history: rows.map(toScheduleDto) };
+}
+
+async function writeSchedule(prisma: PrismaClient, ctx: Ctx, employeeId: string, input: SetScheduleInput) {
+  const calendarId = input.calendarId ?? null;
+  // stored in ascending order so the same days in another order are the same schedule
+  const workDays = [...input.workDays].sort((a, b) => a - b);
+  const effectiveFrom = parseDate(input.effectiveFrom);
+
+  return prisma.$transaction(async (tx) => {
+    if (calendarId) {
+      const calendar = await tx.holidayCalendar.findFirst({ where: { id: calendarId, companyId: ctx.companyId } });
+      if (!calendar) throw new AppError(404, "NOT_FOUND", "calendar not found");
+    }
+
+    const existing = await tx.employeeWorkSchedule.findUnique({
+      where: { companyId_employeeId_effectiveFrom: { companyId: ctx.companyId, employeeId, effectiveFrom } },
+    });
+
+    // the same values again change nothing, so they write no audit row either
+    const unchanged =
+      existing !== null &&
+      new Decimal(existing.hoursPerDay.toString()).equals(input.hoursPerDay) &&
+      existing.calendarId === calendarId &&
+      existing.workDays.length === workDays.length &&
+      existing.workDays.every((d, i) => d === workDays[i]);
+    if (existing && unchanged) return toScheduleDto(existing);
+
+    const values = { hoursPerDay: input.hoursPerDay, workDays, calendarId };
+    const row = existing
+      ? await tx.employeeWorkSchedule.update({ where: { id: existing.id }, data: values })
+      : await tx.employeeWorkSchedule.create({
+          data: { id: uuidv7(), companyId: ctx.companyId, employeeId, effectiveFrom, ...values },
+        });
+
+    // entity id is the schedule row, audit entity ids are uuids and an employee id is not
+    await writeAudit(tx, ctx, {
+      action: "WORK_SCHEDULE_SET",
+      entityType: "work_schedule",
+      entityId: row.id,
+      before: existing ? toAuditValues(existing) : undefined,
+      after: toAuditValues(row),
+    });
+    return toScheduleDto(row);
+  });
+}
+
+// a lost race on the unique index is retried once, the second attempt sees the row and updates it
+export async function setWorkSchedule(prisma: PrismaClient, ctx: Ctx, employeeId: string, input: SetScheduleInput) {
+  try {
+    return await writeSchedule(prisma, ctx, employeeId, input);
+  } catch (err) {
+    if (!isUniqueError(err)) throw err;
+    return await writeSchedule(prisma, ctx, employeeId, input);
+  }
 }

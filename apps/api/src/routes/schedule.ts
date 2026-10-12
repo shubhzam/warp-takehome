@@ -1,9 +1,18 @@
-import { createCalendarBody, setHolidaysBody } from "@repo/shared/schedule";
+import { createCalendarBody, setHolidaysBody, setWorkScheduleBody } from "@repo/shared/schedule";
+import { employeeIdParam } from "@repo/shared/tenure";
 import { Router } from "express";
 import { z } from "zod";
 import { getCtx } from "../lib/auth";
 import { prisma } from "../lib/db";
-import { createCalendar, getCalendar, listCalendars, removeHoliday, setHolidays } from "../services/schedule";
+import {
+  createCalendar,
+  getCalendar,
+  getWorkSchedule,
+  listCalendars,
+  removeHoliday,
+  setHolidays,
+  setWorkSchedule,
+} from "../services/schedule";
 
 const idParam = z.guid();
 const dateParam = z.iso.date();
@@ -35,4 +44,20 @@ calendarsRouter.put("/:id/holidays", async (req, res) => {
 calendarsRouter.delete("/:id/holidays/:date", async (req, res) => {
   const date = dateParam.parse(req.params.date);
   res.json(await removeHoliday(prisma, getCtx(res), idParam.parse(req.params.id), date));
+});
+
+// mounted at /employees
+export const workScheduleRouter: Router = Router();
+
+// GET /employees/:employeeId/work-schedule?asOf= - the schedule on that day (today by default) and every row
+workScheduleRouter.get("/:employeeId/work-schedule", async (req, res) => {
+  const employeeId = employeeIdParam.parse(req.params.employeeId);
+  const asOf = dateParam.optional().parse(req.query.asOf);
+  res.json(await getWorkSchedule(prisma, getCtx(res), employeeId, asOf));
+});
+
+// PUT /employees/:employeeId/work-schedule - one row per effective date, the same date again replaces it
+workScheduleRouter.put("/:employeeId/work-schedule", async (req, res) => {
+  const employeeId = employeeIdParam.parse(req.params.employeeId);
+  res.json(await setWorkSchedule(prisma, getCtx(res), employeeId, setWorkScheduleBody.parse(req.body)));
 });
