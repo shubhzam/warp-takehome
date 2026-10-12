@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { api } from "../lib/api";
-import { hoursLabel, TYPE_LABELS, todayIso, trimHours } from "../lib/format";
+import { hoursLabel, isZeroHours, negateHours, sumHours, TYPE_LABELS, todayIso, trimHours } from "../lib/format";
 import type { RequestStatus, TimeOffRequest } from "../lib/types";
 import { useAction } from "../lib/use-action";
 import { ErrorNote, Tag } from "./ui";
@@ -26,7 +26,9 @@ export function pricingNote(request: TimeOffRequest): string | null {
   if (!c) return null;
   const holidays = c.days.filter((d) => d.kind === "HOLIDAY").length;
   const skipped = holidays > 0 ? `, ${holidays} ${holidays === 1 ? "holiday" : "holidays"} skipped` : "";
-  if (c.source === "GIVEN") {
+  // asking for exactly the scheduled hours reads the same as leaving them out
+  const sameAsScheduled = isZeroHours(sumHours([request.hours, negateHours(c.scheduledHours)]));
+  if (c.source === "GIVEN" && !sameAsScheduled) {
     return `Asked for ${hoursLabel(request.hours)} of ${hoursLabel(c.scheduledHours)} scheduled${skipped}`;
   }
   return `All ${hoursLabel(c.scheduledHours)} scheduled${skipped}`;
