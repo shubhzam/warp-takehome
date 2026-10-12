@@ -998,3 +998,111 @@ textarea.input {
   min-width: 0;
   width: 220px;
 }
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.balance-list {
+  margin: 0;
+}
+
+.balance-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.balance-item:last-child {
+  border-bottom: 0;
+}
+
+.balance-hours {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.select-compact {
+  width: auto;
+  max-width: 100%;
+}
+
+.ledger-list {
+  margin: 0;
+}
+
+.ledger-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ledger-row:last-child {
+  border-bottom: 0;
+}
+
+.ledger-line {
+  display: flex;
+  align-items: center;
+  gap: 6px 12px;
+  flex-wrap: wrap;
+}
+
+.ledger-date {
+  min-width: 6.5em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-policy {
+  flex: 1 1 8em;
+  min-width: 0;
+}
+
+.ledger-hours {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-detail {
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.json {
+  margin: 0;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

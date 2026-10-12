@@ -17,7 +17,7 @@ function splitIds(text: string): string[] {
   return text.split(/[\s,]+/).filter((id) => id.length > 0);
 }
 
-function statusOf(a: Assignment, today: string): { label: string; tone: "ok" | "warn" | "muted" } {
+export function statusOf(a: Assignment, today: string): { label: string; tone: "ok" | "warn" | "muted" } {
   if (a.effectiveTo !== null && a.effectiveTo <= today) return { label: "Ended", tone: "muted" };
   if (a.effectiveFrom > today) return { label: "Starts later", tone: "warn" };
   return { label: "Active", tone: "ok" };

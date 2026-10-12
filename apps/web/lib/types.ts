@@ -40,7 +40,15 @@ export type Balance = { policyId: string; policyName: string; type: TimeOffType;
 
 export type LedgerKind = "ACCRUAL" | "ADJUSTMENT" | "TIME_OFF" | "TIME_OFF_REVERSAL" | "EXPIRATION";
 
-export type AccrualSegment = { versionNo: number; days: number; monthlyHours: string; tenureYears?: number };
+// a time accrual segment has monthlyHours, a payroll accrual segment has earnHours and perHoursWorked instead
+export type AccrualSegment = {
+  versionNo: number;
+  days: number;
+  monthlyHours?: string;
+  tenureYears?: number;
+  earnHours?: string;
+  perHoursWorked?: string;
+};
 
 export type LedgerEntry = {
   id: string;
