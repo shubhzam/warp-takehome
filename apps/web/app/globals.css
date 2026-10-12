@@ -1106,3 +1106,95 @@ textarea.input {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+.grid-split {
+  display: grid;
+  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.calendar-list {
+  margin: 0;
+}
+
+.calendar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  font: inherit;
+  text-align: left;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.calendar-item:hover {
+  background: var(--surface);
+}
+
+.calendar-item-on {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.calendar-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.holiday-list {
+  margin: 0;
+}
+
+.holiday {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.holiday:last-child {
+  border-bottom: 0;
+}
+
+.holiday-line {
+  display: flex;
+  align-items: center;
+  gap: 6px 12px;
+  flex-wrap: wrap;
+}
+
+.holiday-date {
+  min-width: 8.5em;
+  font-variant-numeric: tabular-nums;
+}
+
+.holiday-name {
+  flex: 1 1 8em;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.holiday-edit {
+  display: grid;
+  grid-template-columns: 11em minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 860px) {
+  .grid-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .holiday-edit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
