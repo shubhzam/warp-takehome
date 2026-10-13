@@ -18,6 +18,17 @@ A time off tracking API and the web console on top of it.
 | `packages/ui`, `packages/eslint-config`, `packages/typescript-config` | starter packages (the web app does not use `@repo/ui`) |
 | `apps/docs` | one folder per feature with its planning, techspec and dataflow notes |
 
+## Design
+
+Two one page PDFs in `apps/docs` hold the original design sketches.
+
+| File | What it shows |
+|---|---|
+| [`warp.co 2.pdf`](apps/docs/warp.co%202.pdf) | requirements, core entities, the first API list, the high level design, and the time based and hours worked accrual flows |
+| [`warp.co erd, sequence.pdf`](apps/docs/warp.co%20erd,%20sequence.pdf) | the entity relationship diagram, and the sequence diagrams for submitting a request (employee) and approving it (admin) |
+
+The sketches came first, so the built API differs in places. Paths have no `/v1` prefix, a request takes `startDate`, `endDate` and optional `hours` instead of a list of days, and accrual runs are triggered by `POST /accrual-runs` and `POST /payroll-accruals` rather than a scheduler and a queue. Work schedules and holiday calendars live in this service, not in an existing one. The per feature folders in `apps/docs` describe what was built.
+
 ## Start it with Docker
 
 You need Docker with Compose v2. The seed script also needs `bash`, `curl`, `jq` and `uuidgen`.
