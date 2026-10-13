@@ -29,5 +29,18 @@ services:
       postgres:
         condition: service_healthy
 
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        API_URL: http://api:4000
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
 volumes:
   pgdata:
